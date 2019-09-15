@@ -107,16 +107,16 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(OPENCV_DIR)\..\..\include;$(LIVOX_SDK_ROOT_DIR)\sdk_core\include;$(LIVOX_SDK_ROOT_DIR)\sdk_core\include\third_party\FastCRC;$(LIVOX_SDK_ROOT_DIR)\sdk_core\include\third_party\spdlog;D:\Aps\vcpkg\installed\x64-windows\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(PCL_SDK_ROOT_DIR)\include\pcl;$(OPENCV_DIR)\..\..\include;$(LIVOX_SDK_ROOT_DIR)\sdk_core\include;$(LIVOX_SDK_ROOT_DIR)\sdk_core\include\third_party\FastCRC;$(LIVOX_SDK_ROOT_DIR)\sdk_core\include\third_party\spdlog;D:\Aps\vcpkg\installed\x64-windows\include</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OPENCV_DIR)\debug\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OPENCV_DIR)\debug\lib;$(PCL_SDK_BASE_DIR)\debug\lib</AdditionalLibraryDirectories>
       <AdditionalDependencies>opencv_worldd.lib;$(LIVOX_SDK_ROOT_DIR)\build\sdk_core\Debug\livox_sdk_static.lib;D:\Aps\vcpkg\installed\x64-windows\debug\lib\libapr-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -164,10 +164,16 @@
     <ClInclude Include="DeviceEnumerator.h" />
     <ClInclude Include="lds_lidar.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="RosFakesForWin\CustomMsg.h" />
+    <ClInclude Include="RosFakesForWin\CustomPoint.h" />
+    <ClInclude Include="RosFakesForWin\Header.h" />
+    <ClInclude Include="RosFakesForWin\PointCloud2.h" />
+    <ClInclude Include="RosFakesForWin\PointField.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="lds_lidar.cpp" />
     <ClCompile Include="lidar_sample_cc.cpp" />
+    <ClCompile Include="livox_lidar.cpp" />
     <ClCompile Include="MFuse.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
