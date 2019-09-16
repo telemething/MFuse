@@ -36,17 +36,17 @@
 #include <vector>
 #include <chrono>
 
+#include <iostream>
+#include <chrono>
+#include <thread>
+
 #include "livox_sdk.h"
 #include <string>
 
 //#define USING_ROS
 #define USING_WINDOWS
 
-#ifdef USING_WINDOWS
-#define ROS_INFO printf
-#define ROS_DEBUG printf
-#define ROS_FATAL printf
-#else
+#ifndef USING_WINDOWS
 #include <unistd.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <livox_ros_driver/CustomPoint.h>
@@ -63,24 +63,136 @@
 #else
 #include <point_cloud.h>
 #include <point_types.h>
+#include <pcl\visualization\cloud_viewer.h>
 #include "RosFakesForWin\PointCloud2.h"
 #include "RosFakesForWin\CustomPoint.h"
 #include "RosFakesForWin\CustomMsg.h"
 #endif
 
+// PCLVisualizer
+// http://pointclouds.org/documentation/tutorials/pcl_visualizer.php#pcl-visualizer
+// xyz-intensity data visualization in Visualizer
+// http://www.pcl-users.org/xyz-intensity-data-visualization-in-Visualizer-td3262431.html
+
+pcl::visualization::PCLVisualizer::Ptr simpleVis(pcl::PointCloud<pcl::PointXYZI>::ConstPtr cloud)
+{
+	// --------------------------------------------
+	// -----Open 3D viewer and add point cloud-----
+	// --------------------------------------------
+	pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+	viewer->setBackgroundColor(0, 0, 0);
+	viewer->addPointCloud<pcl::PointXYZI>(cloud, "sample cloud");
+	viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "sample cloud");
+	viewer->addCoordinateSystem(1.0);
+	viewer->initCameraParameters();
+	return (viewer);
+}
+
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 #ifndef USING_ROS
+
+bool logDebug_ = false;
+bool logInfo_ = true;
+
+void ROS_DEBUG(const char* fmt...)
+{
+	if (logDebug_)
+		printf(fmt);
+}
+
+void ROS_INFO(const char* fmt...)
+{
+	if (logInfo_)
+		printf(fmt);
+}
+
+void ROS_FATAL(const char* fmt...)
+{
+	printf(fmt);
+}
+
+void ROS_DEBUGy(const char* fmt...)
+{
+	va_list args;
+	va_start(args, fmt);
+
+	while (*fmt != '\0') {
+		if (*fmt == 'd') {
+			int i = va_arg(args, int);
+			std::cout << i << '\n';
+		}
+		else if (*fmt == 'c') {
+			// note automatic conversion to integral type
+			int c = va_arg(args, int);
+			std::cout << static_cast<char>(c) << '\n';
+		}
+		else if (*fmt == 'f') {
+			double d = va_arg(args, double);
+			std::cout << d << '\n';
+		}
+		++fmt;
+	}
+
+	va_end(args);
+}
+
 namespace ros
 {
 class Publisher
 {
 public:
+
+	pcl::visualization::PCLVisualizer::Ptr viewer = nullptr;
+
 	Publisher() {};
 	~Publisher() {};
-	void publish(boost::shared_ptr<pcl::PointCloud<pcl::PointXYZI>> cloud) {};
+	void publish(boost::shared_ptr<pcl::PointCloud<pcl::PointXYZI>> cloud)
+	{
+		const std::chrono::duration<double, std::milli> sleepDuration(10);
+
+		/*pcl::visualization::CloudViewer cloudViewer("Simple Cloud Viewer");
+		cloudViewer.showCloud(cloud);
+		while (!cloudViewer.wasStopped())
+		{
+			viewer->spinOnce(100);
+			std::this_thread::sleep_for(sleepDuration);
+		}*/
+
+		printf("\r\n--- W: %i", cloud->width);
+
+		if(1200 != cloud->width)
+			return;
+
+		if(viewer == nullptr)
+			viewer = simpleVis(cloud);
+
+		viewer->updatePointCloud<pcl::PointXYZI>(cloud, "sample cloud");
+
+		/*while (!viewer->wasStopped())
+		{
+			viewer->spinOnce(100);
+			std::this_thread::sleep_for(sleepDuration);
+		}*/
+
+		viewer->spinOnce(1);
+
+	};
+
 	void publish(livox_ros_driver::CustomMsg cloud) {};
 };
 }
 #endif
+
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
 
 /* const varible -------------------------------------------------------------------------------- */
 /* user area */
@@ -181,16 +293,32 @@ const char* broadcast_code_list[] = {
 /* total broadcast code, include broadcast_code_list and commandline input */
 std::vector<std::string > total_broadcast_code;
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /* power of 2 buferr operation */
-static bool IsPowerOf2(uint32_t size) {
+static bool IsPowerOf2(uint32_t size) 
+{
 	return (size != 0) && ((size & (size - 1)) == 0);
 }
 
-static uint32_t RoundupPowerOf2(uint32_t size) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+static uint32_t RoundupPowerOf2(uint32_t size) 
+{
 	uint32_t power2_val = 0;
-	for (int i = 0; i < 32; i++) {
+	for (int i = 0; i < 32; i++) 
+	{
 		power2_val = ((uint32_t)1) << i;
-		if (size <= power2_val) {
+		if (size <= power2_val) 
+		{
 			break;
 		}
 	}
@@ -198,19 +326,28 @@ static uint32_t RoundupPowerOf2(uint32_t size) {
 	return power2_val;
 }
 
-/* for pointcloud queue process */
-int InitQueue(StoragePacketQueue* queue, uint32_t queue_size) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
 
-	if (queue == NULL) {
+/* for pointcloud queue process */
+int InitQueue(StoragePacketQueue* queue, uint32_t queue_size) 
+{
+	if (queue == NULL) 
+	{
 		return 1;
 	}
 
-	if (IsPowerOf2(queue_size) != true) {
+	if (IsPowerOf2(queue_size) != true) 
+	{
 		queue_size = RoundupPowerOf2(queue_size);
 	}
 
 	queue->storage_packet = new StoragePacket[queue_size];
-	if (queue->storage_packet == nullptr) {
+	if (queue->storage_packet == nullptr) 
+	{
 		return 1;
 	}
 
@@ -222,52 +359,117 @@ int InitQueue(StoragePacketQueue* queue, uint32_t queue_size) {
 	return 0;
 }
 
-void ResetQueue(StoragePacketQueue* queue) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+void ResetQueue(StoragePacketQueue* queue) 
+{
 	queue->rd_idx = 0;
 	queue->wr_idx = 0;
 }
 
-static void QueueProPop(StoragePacketQueue* queue, StoragePacket* storage_packet) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+static void QueueProPop(StoragePacketQueue* queue, StoragePacket* storage_packet) 
+{
 	uint32_t mask = queue->mask;
 	uint32_t rd_idx = queue->rd_idx & mask;
 
 	memcpy(storage_packet, &(queue->storage_packet[rd_idx]), sizeof(StoragePacket));
 }
 
-static void QueuePopUpdate(StoragePacketQueue* queue) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+static void QueuePopUpdate(StoragePacketQueue* queue) 
+{
 	queue->rd_idx++;
 }
 
-uint32_t QueuePop(StoragePacketQueue* queue, StoragePacket* storage_packet) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+uint32_t QueuePop(StoragePacketQueue* queue, StoragePacket* storage_packet) 
+{
 	QueueProPop(queue, storage_packet);
 	QueuePopUpdate(queue);
 
 	return 1;
 }
 
-uint32_t QueueUsedSize(StoragePacketQueue* queue) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+uint32_t QueueUsedSize(StoragePacketQueue* queue) 
+{
 	return (queue->wr_idx - queue->rd_idx) & queue->mask;
 }
 
-uint32_t QueueIsFull(StoragePacketQueue* queue) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+uint32_t QueueIsFull(StoragePacketQueue* queue) 
+{
 	return ((queue->wr_idx + 1) == queue->rd_idx);
 }
 
-uint32_t QueueIsEmpty(StoragePacketQueue* queue) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+uint32_t QueueIsEmpty(StoragePacketQueue* queue) 
+{
 	return (queue->rd_idx == queue->wr_idx);
 }
 
-static uint32_t GetEthPacketLen(LivoxEthPacket* eth_packet, uint32_t point_num) {
-	if (kCoordinateCartesian == eth_packet->data_type) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+static uint32_t GetEthPacketLen(LivoxEthPacket* eth_packet, uint32_t point_num) 
+{
+	if (kCoordinateCartesian == eth_packet->data_type) 
+	{
 		return (KEthPacketHeaderLength + point_num * KCartesianPointSize);
 	}
-	else {
+	else 
+	{
 		return (KEthPacketHeaderLength + point_num * KSphericalPointSzie);
 	}
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 uint32_t PushEthPacketToStorageQueue(StoragePacketQueue* queue, LivoxEthPacket* eth_packet, \
-	uint32_t point_num, uint64_t timebase) {
+	uint32_t point_num, uint64_t timebase) 
+{
 	uint32_t mask = queue->mask;
 	uint32_t wr_idx = queue->wr_idx & mask;
 
@@ -282,20 +484,30 @@ uint32_t PushEthPacketToStorageQueue(StoragePacketQueue* queue, LivoxEthPacket* 
 	return 1;
 }
 
-static uint64_t GetStoragePacketTimestamp(StoragePacket* packet) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
 
+static uint64_t GetStoragePacketTimestamp(StoragePacket* packet) 
+{
 	LivoxEthPacket* raw_packet = reinterpret_cast<LivoxEthPacket*>(packet->raw_data);
 	uint64_t timestamp = *((uint64_t*)(raw_packet->timestamp));
-	if (raw_packet->timestamp_type == kTimestampTypePps) {
+	if (raw_packet->timestamp_type == kTimestampTypePps) 
+	{
 		return (timestamp + packet->time_rcv);
 	}
-	else if (raw_packet->timestamp_type == kTimestampTypeNoSync) {
+	else if (raw_packet->timestamp_type == kTimestampTypeNoSync) 
+	{
 		return timestamp;
 	}
-	else if (raw_packet->timestamp_type == kTimestampTypePtp) {
+	else if (raw_packet->timestamp_type == kTimestampTypePtp) 
+	{
 		return timestamp;
 	}
-	else if (raw_packet->timestamp_type == kTimestampTypePpsGps) {
+	else if (raw_packet->timestamp_type == kTimestampTypePpsGps) 
+	{
 		struct tm time_utc;
 		time_utc.tm_isdst = 0;
 		time_utc.tm_year = raw_packet->timestamp[0] + 100; // map 2000 to 1990
@@ -311,15 +523,18 @@ static uint64_t GetStoragePacketTimestamp(StoragePacket* packet) {
 
 		return time_epoch;
 	}
-	else {
+	else 
+	{
 		ROS_INFO("timestamp type invalid");
 		return 0;
 	}
 }
 
-static uint32_t GetPointInterval(uint32_t device_type) {
+static uint32_t GetPointInterval(uint32_t device_type) 
+{
 	if ((kDeviceTypeLidarTele == device_type) || \
-		(kDeviceTypeLidarHorizon == device_type)) {
+		(kDeviceTypeLidarHorizon == device_type)) 
+	{
 		return 4167; // 4167 ns
 	}
 	else {
@@ -327,9 +542,17 @@ static uint32_t GetPointInterval(uint32_t device_type) {
 	}
 }
 
-static uint32_t GetPacketNumPerSec(uint32_t device_type) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+static uint32_t GetPacketNumPerSec(uint32_t device_type) 
+{
 	if ((kDeviceTypeLidarTele == device_type) || \
-		(kDeviceTypeLidarHorizon == device_type)) {
+		(kDeviceTypeLidarHorizon == device_type)) 
+	{
 		return 2400; // 2400 raw packet per second
 	}
 	else {
@@ -337,12 +560,21 @@ static uint32_t GetPacketNumPerSec(uint32_t device_type) {
 	}
 }
 
-static uint32_t CalculatePacketQueueSize(uint32_t interval_ms, uint32_t device_type) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+static uint32_t CalculatePacketQueueSize(uint32_t interval_ms, uint32_t device_type) 
+{
 	uint32_t queue_size = (1000000.0 / interval_ms) * GetPacketNumPerSec(device_type);
-	if (queue_size < kMinEthPacketQueueSize) {
+	if (queue_size < kMinEthPacketQueueSize) 
+	{
 		queue_size = kMinEthPacketQueueSize;
 	}
-	else if (queue_size > kMaxEthPacketQueueSize) {
+	else if (queue_size > kMaxEthPacketQueueSize) 
+	{
 		queue_size = kMaxEthPacketQueueSize;
 	}
 
@@ -440,9 +672,16 @@ static uint32_t PublishPointcloud2(StoragePacketQueue * queue, uint32_t packet_n
 }
 #endif
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /* for pointcloud convert process */
 static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_num, \
-	uint8_t handle) {
+	uint8_t handle) 
+{
 	uint64_t timestamp = 0;
 	uint64_t last_timestamp = 0;
 	uint32_t published_packet = 0;
@@ -456,19 +695,22 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
 
 	// add pointcloud
 	StoragePacket storage_packet;
-	while (published_packet < packet_num) {
+	while (published_packet < packet_num) 
+	{
 		QueueProPop(queue, &storage_packet);
 		LivoxEthPacket* raw_packet = reinterpret_cast<LivoxEthPacket*>(storage_packet.raw_data);
 		LivoxRawPoint* raw_points = reinterpret_cast<LivoxRawPoint*>(raw_packet->data);
 
 		timestamp = GetStoragePacketTimestamp(&storage_packet);
 		if (published_packet && \
-			((timestamp - last_timestamp) > kMaxPacketTimeGap)) {
+			((timestamp - last_timestamp) > kMaxPacketTimeGap)) 
+		{
 			ROS_INFO("packet loss : %ld", timestamp);
 			break;
 		}
 
-		if (!cloud->width) {
+		if (!cloud->width) 
+		{
 			//cloud->header.stamp = ros::Time(timestamp/1000000000.0); // to ros time stamp
 
 			cloud->header.stamp = timestamp / 1000.0; // to ros time stamp
@@ -476,7 +718,8 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
 		}
 		cloud->width += storage_packet.point_num;
 
-		for (uint32_t i = 0; i < storage_packet.point_num; i++) {
+		for (uint32_t i = 0; i < storage_packet.point_num; i++) 
+		{
 			pcl::PointXYZI point;
 			point.x = raw_points->x / 1000.0f;
 			point.y = raw_points->y / 1000.0f;
@@ -501,9 +744,16 @@ static uint32_t PublishPointcloud2(StoragePacketQueue* queue, uint32_t packet_nu
 }
 
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /* for pointcloud convert process */
 static uint32_t PublishCustomPointcloud(StoragePacketQueue* queue, uint32_t packet_num, \
-	uint8_t handle) {
+	uint8_t handle) 
+{
 	static uint32_t msg_seq = 0;
 	uint64_t timestamp = 0;
 	uint64_t last_timestamp = 0;
@@ -523,28 +773,33 @@ static uint32_t PublishCustomPointcloud(StoragePacketQueue* queue, uint32_t pack
 	livox_msg.lidar_id = handle;
 
 	StoragePacket storage_packet;
-	while (published_packet < packet_num) {
+	while (published_packet < packet_num) 
+	{
 		QueueProPop(queue, &storage_packet);
 		LivoxEthPacket* raw_packet = reinterpret_cast<LivoxEthPacket*>(storage_packet.raw_data);
 		LivoxRawPoint* raw_points = reinterpret_cast<LivoxRawPoint*>(raw_packet->data);
 
 		timestamp = GetStoragePacketTimestamp(&storage_packet);
 		if (published_packet && \
-			((timestamp - last_timestamp) > kDeviceDisconnectThreshold)) {
+			((timestamp - last_timestamp) > kDeviceDisconnectThreshold)) 
+		{
 			ROS_INFO("packet loss : %ld", timestamp);
 			break;
 		}
-		if (!livox_msg.timebase) {
+		if (!livox_msg.timebase) 
+		{
 			livox_msg.timebase = timestamp; // to us
 			packet_offset_time = 0;         // first packet
 			ROS_DEBUG("[%d]:%ld %d", handle, livox_msg.timebase, point_interval);
 		}
-		else {
+		else 
+		{
 			packet_offset_time = (uint32_t)(timestamp - livox_msg.timebase);
 		}
 		livox_msg.point_num += storage_packet.point_num;
 
-		for (uint32_t i = 0; i < storage_packet.point_num; i++) {
+		for (uint32_t i = 0; i < storage_packet.point_num; i++) 
+		{
 			livox_ros_driver::CustomPoint point;
 			point.offset_time = packet_offset_time + i * point_interval;
 			point.x = raw_points->x / 1000.0f;
@@ -566,27 +821,44 @@ static uint32_t PublishCustomPointcloud(StoragePacketQueue* queue, uint32_t pack
 	return published_packet;
 }
 
-static void PointCloudConvert(LivoxPoint* p_dpoint, LivoxRawPoint* p_raw_point) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+static void PointCloudConvert(LivoxPoint* p_dpoint, LivoxRawPoint* p_raw_point) 
+{
 	p_dpoint->x = p_raw_point->x / 1000.0f;
 	p_dpoint->y = p_raw_point->y / 1000.0f;
 	p_dpoint->z = p_raw_point->z / 1000.0f;
 	p_dpoint->reflectivity = p_raw_point->reflectivity;
 }
 
-void GetLidarData(uint8_t handle, LivoxEthPacket* data, uint32_t data_num, void* client_data) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+void GetLidarData(uint8_t handle, LivoxEthPacket* data, uint32_t data_num, void* client_data) 
+{
 	using namespace std;
 
 	LivoxEthPacket* lidar_pack = data;
 
-	if (!data || !data_num || (handle >= kMaxLidarCount)) {
+	if (!data || !data_num || (handle >= kMaxLidarCount)) 
+	{
 		return;
 	}
 
 	LidarPacketStatistic* packet_statistic = &lidars[handle].statistic_info;
 	uint64_t cur_timestamp = *((uint64_t*)(lidar_pack->timestamp));
-	if (lidar_pack->timestamp_type == kTimestampTypePps) {
+	if (lidar_pack->timestamp_type == kTimestampTypePps) 
+	{
 		if ((cur_timestamp < packet_statistic->last_timestamp) && \
-			(cur_timestamp < kPacketTimeGap)) { // sync point
+			(cur_timestamp < kPacketTimeGap)) 
+		{ // sync point
 
 			auto cur_time = chrono::high_resolution_clock::now();
 			int64_t sync_time = cur_time.time_since_epoch().count();
@@ -599,36 +871,53 @@ void GetLidarData(uint8_t handle, LivoxEthPacket* data, uint32_t data_num, void*
 	packet_statistic->last_timestamp = cur_timestamp;
 
 	StoragePacketQueue* p_queue = &lidars[handle].packet_queue;
-	if (nullptr == p_queue->storage_packet) {
+	if (nullptr == p_queue->storage_packet) 
+	{
 		uint32_t queue_size = CalculatePacketQueueSize(kPublishIntervalMs, lidars[handle].info.type);
 		InitQueue(p_queue, queue_size);
 	}
 
-	if (!QueueIsFull(p_queue)) {
-		if (data_num <= kMaxPointPerEthPacket) {
+	if (!QueueIsFull(p_queue)) 
+	{
+		if (data_num <= kMaxPointPerEthPacket) 
+		{
 			PushEthPacketToStorageQueue(p_queue, lidar_pack, data_num, packet_statistic->timebase);
 		}
 	}
 }
 
-void PollPointcloudData(int msg_type) {
-	for (int i = 0; i < kMaxLidarCount; i++) {
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+void PollPointcloudData(int msg_type) 
+{
+	for (int i = 0; i < kMaxLidarCount; i++) 
+	{
 		StoragePacketQueue* p_queue = &lidars[i].packet_queue;
 
-		if (kDeviceStateSampling != lidars[i].device_state) {
+		if (kDeviceStateSampling != lidars[i].device_state) 
+		{
 			continue;
 		}
 
-		while (!QueueIsEmpty(p_queue)) {
+		while (!QueueIsEmpty(p_queue)) 
+		{
 			//ROS_DEBUG("%d %d %d %d\r\n", i, p_queue->rd_idx, p_queue->wr_idx, QueueUsedSize(p_queue));
 			uint32_t used_size = QueueUsedSize(p_queue);
-			if (kPointCloud2Msg == msg_type) {
-				if (used_size == PublishPointcloud2(p_queue, used_size, i)) {
+			if (kPointCloud2Msg == msg_type) 
+			{
+				if (used_size == PublishPointcloud2(p_queue, used_size, i)) 
+				{
 					break;
 				}
 			}
-			else {
-				if (used_size == PublishCustomPointcloud(p_queue, QueueUsedSize(p_queue), i)) {
+			else 
+			{
+				if (used_size == PublishCustomPointcloud(p_queue, QueueUsedSize(p_queue), i)) 
+				{
 					break;
 				}
 			}
@@ -636,41 +925,67 @@ void PollPointcloudData(int msg_type) {
 	}
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /** add bd to total_broadcast_code */
-void AddBroadcastCode(const char* bd_str) {
+void AddBroadcastCode(const char* bd_str) 
+{
 	total_broadcast_code.push_back(bd_str);
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /** add bd in broadcast_code_list to total_broadcast_code */
 void AddLocalBroadcastCode(void) {
-	for (int i = 0; i < BROADCAST_CODE_LIST_SIZE; ++i) {
+	for (int i = 0; i < BROADCAST_CODE_LIST_SIZE; ++i) 
+	{
 		std::string invalid_bd = "000000000";
 		ROS_INFO("broadcast code list :%s", broadcast_code_list[i]);
 		if ((kCommandlineBdSize == strlen(broadcast_code_list[i])) && \
-			(NULL == strstr(broadcast_code_list[i], invalid_bd.c_str()))) {
+			(NULL == strstr(broadcast_code_list[i], invalid_bd.c_str()))) 
+		{
 			AddBroadcastCode(broadcast_code_list[i]);
 		}
-		else {
+		else 
+		{
 			ROS_INFO("Invalid bd:%s", broadcast_code_list[i]);
 		}
 	}
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /** add commandline bd to total_broadcast_code */
-void AddCommandlineBroadcastCode(const char* cammandline_str) {
+void AddCommandlineBroadcastCode(const char* cammandline_str) 
+{
 	char* strs = new char[strlen(cammandline_str) + 1];
 	strcpy_s(strs, strlen(cammandline_str), cammandline_str);
 
 	std::string pattern = "&";
 	char* bd_str = strtok(strs, pattern.c_str());
 	std::string invalid_bd = "000000000";
-	while (bd_str != NULL) {
+	while (bd_str != NULL) 
+	{
 		ROS_INFO("commandline input bd:%s", bd_str);
 		if ((kCommandlineBdSize == strlen(bd_str)) && \
-			(NULL == strstr(bd_str, invalid_bd.c_str()))) {
+			(NULL == strstr(bd_str, invalid_bd.c_str()))) 
+		{
 			AddBroadcastCode(bd_str);
 		}
-		else {
+		else 
+		{
 			ROS_INFO("Invalid bd:%s", bd_str);
 		}
 		bd_str = strtok(NULL, pattern.c_str());
@@ -680,29 +995,55 @@ void AddCommandlineBroadcastCode(const char* cammandline_str) {
 }
 
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /** Callback function of starting sampling. */
-void OnSampleCallback(uint8_t status, uint8_t handle, uint8_t response, void* data) {
+void OnSampleCallback(uint8_t status, uint8_t handle, uint8_t response, void* data) 
+{
 	ROS_INFO("OnSampleCallback statue %d handle %d response %d", status, handle, response);
-	if (status == kStatusSuccess) {
-		if (response != 0) {
+	if (status == kStatusSuccess) 
+	{
+		if (response != 0) 
+		{
 			lidars[handle].device_state = kDeviceStateConnect;
 		}
 	}
-	else if (status == kStatusTimeout) {
+	else if (status == kStatusTimeout) 
+	{
 		lidars[handle].device_state = kDeviceStateConnect;
 	}
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /** Callback function of stopping sampling. */
-void OnStopSampleCallback(uint8_t status, uint8_t handle, uint8_t response, void* data) {
+void OnStopSampleCallback(uint8_t status, uint8_t handle, uint8_t response, void* data) 
+{
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /** Query the firmware version of Livox LiDAR. */
-void OnDeviceInformation(uint8_t status, uint8_t handle, DeviceInformationResponse* ack, void* data) {
-	if (status != kStatusSuccess) {
+void OnDeviceInformation(uint8_t status, uint8_t handle, DeviceInformationResponse* ack, void* data) 
+{
+	if (status != kStatusSuccess) 
+	{
 		ROS_INFO("Device Query Informations Failed %d", status);
 	}
-	if (ack) {
+	if (ack) 
+	{
 		ROS_INFO("firm ver: %d.%d.%d.%d",
 			ack->firmware_version[0],
 			ack->firmware_version[1],
@@ -711,41 +1052,58 @@ void OnDeviceInformation(uint8_t status, uint8_t handle, DeviceInformationRespon
 	}
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 /** Callback function of changing of device state. */
-void OnDeviceChange(const DeviceInfo* info, DeviceEvent type) {
-	if (info == NULL) {
+void OnDeviceChange(const DeviceInfo* info, DeviceEvent type) 
+{
+	if (info == NULL) 
+	{
 		return;
 	}
 
 	ROS_INFO("OnDeviceChange broadcast code %s update type %d", info->broadcast_code, type);
 
 	uint8_t handle = info->handle;
-	if (handle >= kMaxLidarCount) {
+	if (handle >= kMaxLidarCount) 
+	{
 		return;
 	}
-	if (type == kEventConnect) {
+	if (type == kEventConnect) 
+	{
 		QueryDeviceInformation(handle, OnDeviceInformation, NULL);
-		if (lidars[handle].device_state == kDeviceStateDisconnect) {
+		if (lidars[handle].device_state == kDeviceStateDisconnect) 
+		{
 			lidars[handle].device_state = kDeviceStateConnect;
 			lidars[handle].info = *info;
 		}
 	}
-	else if (type == kEventDisconnect) {
+	else if (type == kEventDisconnect) 
+	{
 		lidars[handle].device_state = kDeviceStateDisconnect;
 	}
-	else if (type == kEventStateChange) {
+	else if (type == kEventStateChange) 
+	{
 		lidars[handle].info = *info;
 	}
 
-	if (lidars[handle].device_state == kDeviceStateConnect) {
+	if (lidars[handle].device_state == kDeviceStateConnect) 
+	{
 		ROS_INFO("Device State status_code %d", lidars[handle].info.status.status_code);
 		ROS_INFO("Device State working state %d", lidars[handle].info.state);
 		ROS_INFO("Device feature %d", lidars[handle].info.feature);
-		if (lidars[handle].info.state == kLidarStateNormal) {
-			if (lidars[handle].info.type == kDeviceTypeHub) {
+		if (lidars[handle].info.state == kLidarStateNormal) 
+		{
+			if (lidars[handle].info.type == kDeviceTypeHub) 
+			{
 				HubStartSampling(OnSampleCallback, NULL);
 			}
-			else {
+			else 
+			{
 				LidarStartSampling(handle, OnSampleCallback, NULL);
 			}
 			lidars[handle].device_state = kDeviceStateSampling;
@@ -753,44 +1111,62 @@ void OnDeviceChange(const DeviceInfo* info, DeviceEvent type) {
 	}
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
 
-void OnDeviceBroadcast(const BroadcastDeviceInfo* info) {
-	if (info == NULL) {
+void OnDeviceBroadcast(const BroadcastDeviceInfo* info) 
+{
+	if (info == NULL) 
+	{
 		return;
 	}
 
 	ROS_INFO("Receive Broadcast Code %s, please add it to broacast_code_list if want to connect!\n", \
 		info->broadcast_code);
 
-	if (total_broadcast_code.size() > 0) {
+	if (total_broadcast_code.size() > 0) 
+	{
 		bool found = false;
-		for (int i = 0; i < total_broadcast_code.size(); ++i) {
-			if (strncmp(info->broadcast_code, total_broadcast_code[i].c_str(), kBroadcastCodeSize) == 0) {
+		for (int i = 0; i < total_broadcast_code.size(); ++i) 
+		{
+			if (strncmp(info->broadcast_code, total_broadcast_code[i].c_str(), kBroadcastCodeSize) == 0) 
+			{
 				found = true;
 				break;
 			}
 		}
-		if (!found) {
+		if (!found) 
+		{
 			ROS_INFO("Not in the broacast_code_list, please add it to if want to connect!");
 			return;
 		}
 	}
-	else {
+	else 
+	{
 		ROS_INFO("In automatic connection mode, will connect %s", info->broadcast_code);
 	}
 
 	bool result = false;
 	uint8_t handle = 0;
 	result = AddLidarToConnect(info->broadcast_code, &handle);
-	if (result == kStatusSuccess && handle < kMaxLidarCount) {
+	if (result == kStatusSuccess && handle < kMaxLidarCount) 
+	{
 		SetDataCallback(handle, GetLidarData, NULL);
 		lidars[handle].handle = handle;
 		lidars[handle].device_state = kDeviceStateDisconnect;
 	}
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
 
-int livox_lidar_main(int argc, char** argv) 
+int livox_lidar_main(int argc, char** argv)
 {
 
 #ifdef USING_ROS
@@ -802,24 +1178,30 @@ int livox_lidar_main(int argc, char** argv)
 
 	ROS_INFO("Livox-SDK ros demo");
 
-	if (!Init()) {
+	if (!Init()) 
+	{
 		ROS_FATAL("Livox-SDK init fail!");
 		return -1;
 	}
 
 	AddLocalBroadcastCode();
-	if (argc >= kBdArgcNum) {
+
+	if (argc >= kBdArgcNum) 
+	{
 		ROS_INFO("Commandline input %s", argv[kBdArgvPos]);
 		AddCommandlineBroadcastCode(argv[kBdArgvPos]);
 	}
 
-	if (total_broadcast_code.size() > 0) {
+	if (total_broadcast_code.size() > 0) 
+	{
 		ROS_INFO("list all valid bd:");
-		for (int i = 0; i < total_broadcast_code.size(); ++i) {
+		for (int i = 0; i < total_broadcast_code.size(); ++i) 
+		{
 			ROS_INFO("%s", total_broadcast_code[i].c_str());
 		}
 	}
-	else {
+	else 
+	{
 		ROS_INFO("No valid bd input, switch to automatic connection mode!");
 	}
 
@@ -827,7 +1209,8 @@ int livox_lidar_main(int argc, char** argv)
 	SetBroadcastCallback(OnDeviceBroadcast);
 	SetDeviceStateUpdateCallback(OnDeviceChange);
 
-	if (!Start()) {
+	if (!Start()) 
+	{
 		Uninit();
 		return -1;
 	}
@@ -857,6 +1240,15 @@ int livox_lidar_main(int argc, char** argv)
 	{
 		PollPointcloudData(msg_type);
 		r.sleep();
+	}
+#else
+	const bool ok = true;
+	const std::chrono::duration<double, std::milli> sleepDuration(10);
+
+	while(ok)
+	{
+		PollPointcloudData(LivoxMsgType::kPointCloud2Msg);
+		std::this_thread::sleep_for(sleepDuration);
 	}
 #endif
 	Uninit();

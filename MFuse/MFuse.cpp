@@ -1043,10 +1043,13 @@ int simpleVidint(int deviceID1, int deviceID2, int deviceID3)
 }
 
 int lidar_sample_cc_main(int argc, const char* argv[]);
+int livox_lidar_main(int argc, char** argv);
 
-int main(int argc, const char** argv)
+int main(int argc, char** argv)
 {
-	lidar_sample_cc_main(argc, argv);
+	//lidar_sample_cc_main(argc, argv);
+
+	livox_lidar_main(argc, argv);
 
 	auto devices = findVideoDevices("USB", "FLIR");
 
