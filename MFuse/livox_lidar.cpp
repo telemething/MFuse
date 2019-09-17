@@ -141,6 +141,113 @@ void ROS_DEBUGy(const char* fmt...)
 	va_end(args);
 }
 
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
+namespace PclViz
+{
+class Viewer
+{
+private:
+
+	pcl::visualization::PCLVisualizer::Ptr pclVizGui = nullptr;
+	std::thread vizWorkerThread_;
+	bool gotCloudData_ = false;
+	std::string cloudName = "cloud1";
+	std::vector<pcl::PointCloud<pcl::PointXYZI>> pointCloudStack;
+
+	pcl::visualization::PCLVisualizer::Ptr simpleVis2()
+	{
+		// --------------------------------------------
+		// -----Open 3D viewer and add point cloud-----
+		// --------------------------------------------
+		pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+		viewer->setBackgroundColor(0, 0, 0);
+		//viewer->addPointCloud<pcl::PointXYZI>(cloud, "cloud1");
+		//viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "cloud1");
+		viewer->addCoordinateSystem(1.0);
+		viewer->initCameraParameters();
+		return (viewer);
+	}
+
+	void vizWorker()
+	{
+		pclVizGui = simpleVis2();
+		const std::chrono::duration<double, std::milli> sleepDuration(10);
+
+		while (!pclVizGui->wasStopped())
+		{
+			if( !pointCloudStack.empty())
+			{
+				const auto cloud = pointCloudStack.back();
+				const auto cloudPtr = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>(cloud);
+
+				pointCloudStack.pop_back();
+
+				if (!gotCloudData_)
+				{
+					pclVizGui->addPointCloud<pcl::PointXYZI>(cloudPtr, cloudName);
+					pclVizGui->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
+					gotCloudData_ = true;
+				}
+				else
+				{
+					pclVizGui->updatePointCloud<pcl::PointXYZI>(cloudPtr, cloudName);
+				}
+			}
+
+			pclVizGui->spinOnce(100);
+			std::this_thread::sleep_for(sleepDuration);
+		}
+	}
+
+public:
+
+	Viewer() {};
+	~Viewer() {};
+
+	int Start()
+	{
+		vizWorkerThread_ = std::thread(&Viewer::vizWorker, this);
+		return 0;
+	}
+
+	int Update(boost::shared_ptr<pcl::PointCloud<pcl::PointXYZI>> cloud)
+	{
+		printf("\r\n--- W: %i", cloud->width);
+
+		if (1200 != cloud->width)
+			return 0;
+
+		pointCloudStack.push_back(*cloud);
+
+		//TODO : add a critical section
+
+		/*if(gotCloudData_)
+		{
+			pclVizGui->addPointCloud<pcl::PointXYZI>(cloud, cloudName);
+			pclVizGui->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, cloudName);
+			gotCloudData_ = true;
+		}
+		else
+		{
+			//pclVizGui->updatePointCloud<pcl::PointXYZI>(cloud, cloudName);
+		}*/
+
+		return 0;
+	};
+};
+}
+
+//*****************************************************************************
+//* Description:
+//* Params:
+//* Returns:
+//*****************************************************************************
+
 namespace ros
 {
 class Publisher
@@ -149,9 +256,16 @@ public:
 
 	pcl::visualization::PCLVisualizer::Ptr viewer = nullptr;
 
-	Publisher() {};
+	PclViz::Viewer pclVizViewer_;
+
+	Publisher() { pclVizViewer_.Start(); };
 	~Publisher() {};
 	void publish(boost::shared_ptr<pcl::PointCloud<pcl::PointXYZI>> cloud)
+	{
+		pclVizViewer_.Update(cloud);
+	};
+
+	void publishy(boost::shared_ptr<pcl::PointCloud<pcl::PointXYZI>> cloud)
 	{
 		const std::chrono::duration<double, std::milli> sleepDuration(10);
 
@@ -165,10 +279,10 @@ public:
 
 		printf("\r\n--- W: %i", cloud->width);
 
-		if(1200 != cloud->width)
+		if (1200 != cloud->width)
 			return;
 
-		if(viewer == nullptr)
+		if (viewer == nullptr)
 			viewer = simpleVis(cloud);
 
 		viewer->updatePointCloud<pcl::PointXYZI>(cloud, "sample cloud");
